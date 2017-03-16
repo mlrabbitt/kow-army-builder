@@ -3,55 +3,109 @@
     <script src="https://unpkg.com/react@latest/dist/react.js"></script>
     <script src="https://unpkg.com/react-dom@latest/dist/react-dom.js"></script>
     <script src="https://unpkg.com/babel-standalone@latest/babel.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.js"></script>
+    <link href="css/kow.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans" rel="stylesheet">
   </head>
-  <style>
-    ul {
-      list-style-type: none;
-    }
-    #flex {
-      display: flex;
-    }
-  </style>
   <body>
-    <div id="root">
+    <div id="container">
+      <div id="header">KoW Army Builder</div>
+      <div id="builder">
+      </div>
     </div>
-    <script>
-      var kow;
+  </body>
+  <script type="text/babel">
+    $.getJSON('kow.pretty.json', function(data) {
+        loadBuilder(data.armies, data.artifacts);
+    });
 
-      $.ajaxSetup({
-        async: false
-      });
-      $.getJSON('https://cdn.rawgit.com/mlrabbitt/kow-army-builder/master/kow.pretty.json', function(data) {
-        kow = data;
-      });
-    </script>
-    <script type="text/babel">
+    function loadBuilder(armies, artifacts) {
       class Builder extends React.Component {
-        constructor (props) {
+        constructor(props) {
           super(props);
-          this.handleArmyChange = this.handleArmyChange.bind(this);
-          this.handleUnitChange = this.handleUnitChange.bind(this);
-          this.state = {selectedArmy: 0, selectedUnit: null, variations: null};
+          this.state = {currentArmy: 0, currentUnit: 0, currentVariation: 0, addedArtifact: null, myArmies: []}
+          this.handleSelectArmy = this.handleSelectArmy.bind(this);
+          this.handleSelectUnit = this.handleSelectUnit.bind(this);
+          this.handleSelectVariation = this.handleSelectVariation.bind(this);
+          this.handleAddUnit = this.handleAddUnit.bind(this);
+          this.handleCheckedArtifact = this.handleCheckedArtifact.bind(this);
+          this.handleRemoveUnit = this.handleRemoveUnit.bind(this);
         }
 
-        handleArmyChange(value) {
-          this.setState({selectedArmy: value, selectedUnit: null, variations: null});
+        handleSelectArmy(id) {
+          this.setState({currentArmy: id, currentUnit: 0, currentVariation: 0});
         }
-        handleUnitChange(value) {
-          this.setState({selectedUnit: value, variations: this.props.kow[this.state.selectedArmy].units[value].variations});
+
+        handleSelectUnit(id) {
+          this.setState({currentUnit: id, currentVariation: 0});
+        }
+
+        handleSelectVariation(id) {
+          this.setState({currentVariation: id});
+        }
+
+        handleAddUnit(id) {
+          var newUnit = {unit: this.state.currentUnit, variation: id, artifact: this.state.addedArtifact};
+
+          var exists = false;
+          var newArmies = this.state.myArmies;
+          for (var i = 0; i < this.state.myArmies.length; i++) {
+            if (this.state.currentArmy == newArmies[i].army) {
+              exists = true;
+              newArmies[i].units.push(newUnit)
+              break;
+            }
+          }
+
+          if (exists == false) {
+            newArmies.push({army: this.state.currentArmy, units: [newUnit]});
+          }
+
+          this.setState({myArmies: newArmies, addedArtifact: null});
+        }
+
+        handleRemoveUnit(army, index) {
+          var newArmies = this.state.myArmies;
+          for (var i = 0; i < newArmies.length; i++) {
+            if (newArmies[i].army == army) {
+              console.log(index);
+              newArmies[i].units.splice(index, 1);
+              console.log(newArmies);
+              break;
+            }
+          }
+          this.setState({myArmies: newArmies});
+        }
+
+        handleCheckedArtifact(id) {
+          this.setState({addedArtifact: id});
         }
 
         render() {
           return (
-            <div id="flex">
-              <Armies kow={this.props.kow}
-                    selectedArmy={this.state.selectedArmy}
-                    onChange={this.handleArmyChange} />
-              <Units units={this.props.kow[this.state.selectedArmy].units} 
-                     selectedUnit={this.state.selectedUnit}
-                     variations={this.state.variations}
-                     onChange={this.handleUnitChange} />
+            <div id="main">
+              <Armies armies={this.props.armies}
+                      currentArmy={this.state.currentArmy}
+                      selectArmy={this.handleSelectArmy} />
+              <div id="panels">
+                <Units units={this.props.armies[this.state.currentArmy].units}
+                       armyCSS={this.props.armies[this.state.currentArmy].short}
+                       currentUnit={this.state.currentUnit}
+                       selectUnit={this.handleSelectUnit} />
+                <Variations currentVariation={this.state.currentVariation}
+                            variations={this.props.armies[this.state.currentArmy].units[this.state.currentUnit].variations}
+                            selectVariation={this.handleSelectVariation}
+                            unit={this.props.armies[this.state.currentArmy].units[this.state.currentUnit]}
+                            armyCSS={this.props.armies[this.state.currentArmy].short}
+                            addUnit={this.handleAddUnit}
+                            addedArtifact={this.state.addedArtifact}
+                            checkArtifact={this.handleCheckedArtifact}
+                            artifacts={this.props.artifacts} />
+                <MyArmy myArmies={this.state.myArmies}
+                        armies={this.props.armies}
+                        artifacts={this.props.artifacts}
+                        removeUnit={this.handleRemoveUnit} />
+              </div>
             </div>
           );
         }
@@ -60,20 +114,25 @@
       class Armies extends React.Component {
         constructor(props) {
           super(props);
-          this.handleChange = this.handleChange.bind(this);
-        }
-     
-        handleChange(e) {
-          this.props.onChange(e.target.value);
         }
 
         render() {
+          var armyItems = this.props.armies.map((army) => {
+            var armyClass;
+            if (army.id == this.props.currentArmy) {
+              armyClass = army.short + " army";
+            }
+            else {
+              armyClass = army.short;
+            }
+            return <li className={armyClass} key={army.id} value={army.id} onClick={() => this.props.selectArmy(army.id)}>{army.name}</li>;
+          });
+
           return (
-            <div id="armies">
-              <ul>
-                {this.props.kow.map(army => (
-                  army.id == this.props.selectedArmy ? <li key={army.id} value={army.id} onClick={this.handleChange}><b>{army.name}</b></li> : <li key={army.id} value={army.id} onClick={this.handleChange}>{army.name}</li>
-                ))}
+            <div id="sidebar">
+              <div className="panelHeader">Armies</div>
+              <ul id="armyList">
+                {armyItems}
               </ul>
             </div>
           );
@@ -83,20 +142,25 @@
       class Units extends React.Component {
         constructor(props) {
           super(props);
-          this.handleChange = this.handleChange.bind(this);
         }
 
-        handleChange(e) {
-          this.props.onChange(e.target.value);
-        }
+        render() {
+          var unitItems = this.props.units.map((unit, index) => {
+            var listClass;
+            if (unit.id == this.props.currentUnit) {
+              listClass = this.props.armyCSS + " listFlex army";
+            }
+            else {
+              listClass = this.props.armyCSS + " listFlex u" + String(index % 2);
+            }
+            return <li className={listClass} key={unit.id} onClick={() => this.props.selectUnit(unit.id)}><a className="item">{unit.name}</a><a className="item">{unit.types.join("|")}</a></li>;
+          });
 
-        render () {
           return (
-            <div id="units">
-              <ul>
-                {this.props.units.map((unit, index) => (
-                  index == this.props.selectedUnit ? [<li key={index} value={index} onClick={this.handleChange}><b>{unit.name}</b></li>, <Variations variations={this.props.variations} />] : <li key={index} value={index} onClick={this.handleChange}>{unit.name}</li>
-              ))}
+            <div className="panel">
+              <div className="panelHeader">Units</div>
+              <ul className="panelList">
+                {unitItems}
               </ul>
             </div>
           );
@@ -106,32 +170,178 @@
       class Variations extends React.Component {
         constructor(props) {
           super(props);
+          this.state = {currentArtifact: null};
+          this.handleSelectArtifact = this.handleSelectArtifact.bind(this);
+        }
+
+        handleSelectArtifact(id) {
+          this.setState({currentArtifact: id});
+        }
+
+        render() {
+          var variationItems = this.props.variations.map((variation, index) => {
+            var listClass;
+            var variationName = this.props.unit.name;
+            if ("suffix" in variation) {
+              variationName = this.props.unit.name + " " + variation.suffix;
+            }
+            variationName = variationName + " - " + variation.type + " - " + variation.size + " (" + variation.count + ")";
+            if (variation.id == this.props.currentVariation) {
+              listClass = this.props.armyCSS + " listFlex army";
+            }
+            else {
+              listClass = this.props.armyCSS + " listFlex u" + String(index % 2);
+            }
+            return <li className={listClass} key={variation.id} onClick={() => this.props.selectVariation(variation.id)}><a className="item firstItem">{variationName}</a><a className="points">{variation.points}</a><a className="add" onClick={() => this.props.addUnit(variation.id)}>+</a></li>;
+          });
+
+          return (
+            <div className="panel">
+              <div className="panelHeader">Variations</div>
+              <ul className="panelList">
+                {variationItems}
+              </ul>
+              <VariationStats stats={this.props.variations[this.props.currentVariation]}
+                              armyCSS={this.props.armyCSS} />
+              <Artifacts artifacts={this.props.artifacts}
+                         armyCSS={this.props.armyCSS}
+                         currentArtifact={this.state.currentArtifact}
+                         selectArtifact={this.handleSelectArtifact}
+                         addedArtifact={this.props.addedArtifact}
+                         checkArtifact={this.props.checkArtifact} />
+            </div>
+          );
+        }
+      }
+
+      class VariationStats extends React.Component {
+        constructor(props) {
+          super(props);
         }
 
         render() {
           return (
-            <table>
-              <tbody>
-                <tr>
-                  <th>Type</th><th>Size</th><th>Sp</th><th>Me</th><th>Ra</th><th>De</th><th>At</th><th>Ne</th><th>Pt</th><th>Rules</th><th>Options</th>
-                </tr>
-                  {this.props.variations.map(vari => (
-                    <tr key={vari.id}>
-                      <td>{vari.type}</td><td>{vari.s_type}</td><td>{vari.speed}</td><td>{vari.melee}</td><td>{vari.range}</td><td>{vari.defense}</td><td>{vari.attack}</td><td>{vari.nerve}</td><td>{vari.points}</td><td>{vari.rules}</td><td>{vari.options}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+              <div className="stats">
+                <table className={this.props.armyCSS + " army"}>
+                  <tbody>
+                    <tr><td><b>Speed</b><br/>{this.props.stats.speed}</td><td><b>Melee</b><br/>{this.props.stats.melee}</td>
+                    <td><b>Range</b><br/>{this.props.stats.range}</td><td><b>Defense</b><br/>{this.props.stats.defense}</td>
+                    <td><b>Attack</b><br/>{this.props.stats.attack}</td><td><b>Nerve</b><br/>{this.props.stats.nerve}</td></tr>
+                    <tr><td colSpan="100%"><b>Rules</b><br/>{this.props.stats.rules}</td></tr>
+                    <tr><td colSpan="100%"><b>Options</b><br/>{this.props.stats.options}</td></tr>
+                  </tbody>
+                </table>
+              </div>
           );
         }
+      }
 
+      class Artifacts extends React.Component {
+        constructor(props) {
+          super(props);
+        }
+
+        render() {
+          var artifactItems = this.props.artifacts.map((artifact, index) => {
+            var listClass, aClass, aContent;
+            if (this.props.addedArtifact == artifact.id) {
+              aClass = "check army";
+              aContent = "\u2713";
+            }
+            else {
+              aClass = "check";
+              aContent = "x";
+            }
+
+            if (artifact.id == this.props.currentArtifact) {
+              listClass = this.props.armyCSS + " listFlex army";
+            }
+            else {
+              listClass = this.props.armyCSS + " listFlex u" + String(index % 2);
+            }
+            return <li className={listClass} key={artifact.id} onClick={() => this.props.selectArtifact(artifact.id)}><a className="item firstItem">{artifact.name}</a><a className="points">{artifact.points}</a><a className={aClass} onClick={() => this.props.checkArtifact(artifact.id)}>{aContent}</a></li>;
+            });
+
+          function ArtifactRules(props) {
+            var rules;
+            if (props.currentArtifact != undefined) {
+              rules = props.artifacts[props.currentArtifact].rules;
+            }
+            else {
+              rules = "No artifact selected";
+            }
+            return <div className={props.armyCSS + " army artifactRules"}><b>Rules</b><br/>{rules}</div>;
+          }
+
+          return (
+            <div className="artifacts">
+              <div className="panelHeader">Artifacts</div>
+              <ul className="panelList artifactList">
+                {artifactItems}
+              </ul>
+              <ArtifactRules artifacts={this.props.artifacts}
+                             currentArtifact={this.props.currentArtifact}
+                             armyCSS={this.props.armyCSS} />
+            </div>
+          );
+        }
+      }
+
+      class MyArmy extends React.Component {
+        constructor(props) {
+          super(props);
+        }
+
+        render() {
+          var listIndex = -1;
+          var armyItems = this.props.myArmies.map((army) => {
+            var unitItems = army.units.map((unit, index) => {
+              var name = this.props.armies[army.army].units[unit.unit].name;
+              if ("suffix" in this.props.armies[army.army].units[unit.unit].variations[unit.variation]) {
+                name = this.props.armies[army.army].units[unit.unit].name + this.props.armies[army.army].units[unit.unit].variations[unit.variation].suffix;
+              }
+              var type = this.props.armies[army.army].units[unit.unit].variations[unit.variation].type;
+              var size = this.props.armies[army.army].units[unit.unit].variations[unit.variation].size;
+              var count = this.props.armies[army.army].units[unit.unit].variations[unit.variation].count;
+              name = name + " - " + type + " - " + size + " (" + count + ")";
+              var points = this.props.armies[army.army].units[unit.unit].variations[unit.variation].points;
+ 
+              var artifact = null;
+              if (unit.artifact != null) {
+                artifact = <div className="myArtifact"><a className="myArtifact">{this.props.artifacts[unit.artifact].name}</a><a className="points">{this.props.artifacts[unit.artifact].points}</a><a className="remove">-</a></div>
+              }
+              listIndex++;
+              return <li className={"listFlex u" + String(listIndex % 2)} key={listIndex}>
+                       <a className="firstItem">{name}</a>
+                       {artifact}
+                       <a className="points">{points}</a>
+                       <a className="remove" onClick={() => this.props.removeUnit(army.army, index)}>-</a>
+                     </li>;
+            });
+         
+            return <div key={army.army}>
+                     <div className={this.props.armies[army.army].short + " army"}>{this.props.armies[army.army].name}</div>
+                     <ul>
+                       {unitItems}
+                     </ul>
+                   </div>;
+          });
+              
+
+          return (
+            <div className="myArmy">
+              <div className="panelHeader">My Army</div>
+              {armyItems}
+            </div>
+          );
+        }
       }
 
       ReactDOM.render(
-        <Builder kow={kow} />,
-        document.getElementById('root')
+        <Builder armies={armies}
+                 artifacts={artifacts} />,
+        document.getElementById('builder')
       );
-    </script>
-    </script>
-  </body>
+    }
+  </script>
 </html>
